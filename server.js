@@ -15,66 +15,82 @@ app.use(cors({
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '.')));
 
-// Health Check Endpoint
-app.get('/health', (req, res) => {
-  res.status(200).send('Service Healthy');
-});
-
-// TrackMage Proxy Endpoint for Pos Malaysia
+// Enhanced Pos Malaysia Tracking Endpoint
 app.get('/track', async (req, res) => {
+  const { number } = req.query;
+  const startTime = Date.now();
+
+  // Validate tracking number format (Pos Malaysia format)
+  if (!number || !/^[A-Za-z]{2}\d{9}[A-Za-z]{2}$/.test(number)) {
+    return res.status(400).json({
+      error: 'Format nombor tracking tidak valid',
+      contoh_valid: 'ENE083992448MY',
+      pola: '2 huruf + 9 digit + 2 huruf'
+    });
+  }
+
   try {
-    const { number } = req.query;
+    // Try multiple possible carrier codes for Pos Malaysia
+    const carriers = [
+      'pos-malaysia', 
+      'poslaju',
+      'my-post',
+      'malaysia-post'
+    ];
+
+    let lastError = null;
     
-    if (!number) {
-      return res.status(400).json({ 
-        error: 'Sila masukkan nombor tracking',
-        contoh: 'ENE083992448MY'
-      });
+    for (const carrier of carriers) {
+      try {
+        const response = await axios.get('https://api.trackmage.com/v1/shipments/track', {
+          params: { number, carrier },
+          headers: {
+            'Authorization': `Bearer ${process.env.TRACKMAGE_API_KEY}`,
+            'Accept': 'application/json'
+          },
+          timeout: 3000
+        });
+
+        if (response.data && !response.data.error) {
+          const processingTime = Date.now() - startTime;
+          return res.json({
+            success: true,
+            trackingNumber: number,
+            carrier: 'Pos Malaysia',
+            status: response.data.status || 'Dalam proses',
+            events: response.data.events || [],
+            processingTime: `${processingTime}ms`,
+            carrierUsed: carrier
+          });
+        }
+      } catch (err) {
+        lastError = err;
+        continue;
+      }
     }
 
-    const response = await axios.get('https://api.trackmage.com/v1/shipments/track', {
-      params: { 
-        number,
-        carrier: 'pos-malaysia'
-      },
-      headers: {
-        'Authorization': `Bearer ${process.env.TRACKMAGE_API_KEY}`,
-        'Accept': 'application/json'
-      },
-      timeout: 5000 // 5 seconds timeout
-    });
+    throw lastError || new Error('Semua percubaan carrier gagal');
 
-    // Transform response for better formatting
-    const transformedData = {
-      trackingNumber: response.data.trackingNumber || number,
-      status: response.data.status || 'Tiada maklumat',
-      carrier: 'Pos Malaysia',
-      events: response.data.events?.map(event => ({
-        date: event.date,
-        status: event.status,
-        location: event.location || 'Lokasi tidak dinyatakan'
-      })) || []
+  } catch (error) {
+    const errorDetails = {
+      status: error.response?.status || 500,
+      message: 'Gagal mendapatkan maklumat tracking',
+      details: {
+        apiError: error.response?.data || error.message,
+        suggestion: 'Sila pastikan nombor tracking betul atau cuba lagi nanti'
+      },
+      timestamp: new Date().toISOString()
     };
 
-    res.json(transformedData);
-  } catch (error) {
-    console.error('Tracking error:', error.message);
-    
-    let status = 500;
-    let message = 'Gagal melacak bungkusan. Sila cuba lagi.';
-
-    if (error.response) {
-      status = error.response.status;
-      message = error.response.data?.message || 
-               error.response.data?.error || 
-               message;
-    } else if (error.request) {
-      message = 'Tiada sambungan ke server TrackMage';
+    // Special handling for 404 errors
+    if (error.response?.status === 404) {
+      errorDetails.message = 'Nombor tracking tidak ditemui dalam sistem';
+      errorDetails.suggestion = 'Pastikan nombor betul atau bungkusan sudah didaftarkan';
     }
 
-    res.status(status).json({ 
-      error: message,
-      details: error.response?.data || error.message 
+    res.status(errorDetails.status).json({
+      error: true,
+      ...errorDetails
     });
   }
 });
@@ -86,5 +102,5 @@ app.get('*', (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Server berjalan di port ${PORT}`);
-  console.log(`Endpoint tracking: http://localhost:${PORT}/track?number=ENE083992448MY`);
+  console.log(`Contoh endpoint: http://localhost:${PORT}/track?number=ENE083992448MY`);
 });
