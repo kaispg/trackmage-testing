@@ -10,19 +10,23 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static(path.join(__dirname, '.')));
 app.use(express.json());
 
-// TrackMage Proxy Endpoint
+// TrackMage Proxy Endpoint khusus Pos Malaysia
 app.get('/track', async (req, res) => {
   try {
-    const { number, carrier } = req.query;
+    const { number } = req.query;
     
-    if (!number || !carrier) {
+    if (!number) {
       return res.status(400).json({ 
-        error: 'Missing tracking number or carrier' 
+        error: 'Sila masukkan nombor tracking' 
       });
     }
 
+    // Gunakan carrier code 'pos-malaysia' untuk Pos Malaysia
     const response = await axios.get('https://api.trackmage.com/v1/shipments/track', {
-      params: { number, carrier },
+      params: { 
+        number,
+        carrier: 'pos-malaysia' // Carrier code khusus Pos Malaysia
+      },
       headers: {
         'Authorization': `Bearer ${process.env.TRACKMAGE_API_KEY}`,
         'Accept': 'application/json'
@@ -35,8 +39,7 @@ app.get('/track', async (req, res) => {
     
     const status = error.response?.status || 500;
     const message = error.response?.data?.message || 
-                   error.response?.data?.error || 
-                   'Failed to track shipment';
+                   'Gagal melacak bungkusan. Sila cuba lagi.';
     
     res.status(status).json({ 
       error: message,
@@ -45,11 +48,11 @@ app.get('/track', async (req, res) => {
   }
 });
 
-// Serve index.html for all other routes
+// Serve index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Server berjalan di http://localhost:${PORT}`);
 });

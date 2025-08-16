@@ -1,73 +1,87 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ms">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>TrackMage Tracking</title>
+  <title>Pengesanan Pos Malaysia</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       max-width: 800px;
       margin: 0 auto;
       padding: 20px;
+      background-color: #f5f5f5;
+    }
+    .header {
+      background-color: #E11E26;
+      color: white;
+      padding: 15px;
+      border-radius: 5px;
+      text-align: center;
     }
     .tracking-form {
-      margin-bottom: 20px;
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
+      margin: 20px 0;
+      background: white;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
-    input, select, button {
-      padding: 8px 12px;
-      font-size: 16px;
-    }
-    button {
-      background: #0070f3;
-      color: white;
-      border: none;
-      cursor: pointer;
+    input {
+      padding: 10px;
+      width: 70%;
+      border: 1px solid #ddd;
       border-radius: 4px;
     }
-    button:disabled {
-      background: #ccc;
-      cursor: not-allowed;
+    button {
+      padding: 10px 15px;
+      background-color: #E11E26;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
     }
     .result {
-      margin-top: 20px;
-      padding: 15px;
-      border: 1px solid #ddd;
+      background: white;
+      padding: 20px;
       border-radius: 5px;
-    }
-    .error {
-      color: red;
-      margin-top: 10px;
+      margin-top: 20px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
     .event {
-      margin: 5px 0;
-      padding: 5px;
-      border-left: 3px solid #0070f3;
+      border-left: 3px solid #E11E26;
+      padding-left: 10px;
+      margin: 10px 0;
+    }
+    .error {
+      color: #E11E26;
+      padding: 10px;
     }
   </style>
 </head>
 <body>
-  <h1>Shipment Tracking</h1>
-  
-  <div class="tracking-form">
-    <input type="text" id="trackingNumber" placeholder="Enter tracking number">
-    <select id="carrier">
-      <option value="ups">UPS</option>
-      <option value="fedex">FedEx</option>
-      <option value="usps">USPS</option>
-      <option value="dhl">DHL</option>
-    </select>
-    <button id="trackButton">Track</button>
+  <div class="header">
+    <h1>Pengesanan Pos Malaysia</h1>
   </div>
   
-  <div id="loading" style="display: none;">Loading...</div>
+  <div class="tracking-form">
+    <h2>Semak Status Bungkusan</h2>
+    <input 
+      type="text" 
+      id="trackingNumber" 
+      placeholder="Masukkan nombor tracking (cth: ENE083992448MY)"
+      value="ENE083992448MY" <!-- Contoh nomor tracking -->
+    >
+    <button id="trackButton">Semak</button>
+  </div>
+  
+  <div id="loading" style="display: none; padding: 20px;">
+    <p>Sedang memproses...</p>
+  </div>
+  
   <div id="error" class="error"></div>
   
   <div id="result" class="result" style="display: none;">
-    <h2>Tracking Result</h2>
+    <h2>Maklumat Pengesanan</h2>
     <div id="trackingInfo"></div>
   </div>
 
@@ -75,8 +89,7 @@
     document.getElementById('trackButton').addEventListener('click', trackShipment);
 
     async function trackShipment() {
-      const trackingNumber = document.getElementById('trackingNumber').value;
-      const carrier = document.getElementById('carrier').value;
+      const trackingNumber = document.getElementById('trackingNumber').value.trim();
       const resultDiv = document.getElementById('result');
       const errorDiv = document.getElementById('error');
       const loadingDiv = document.getElementById('loading');
@@ -88,48 +101,42 @@
       loadingDiv.style.display = 'block';
 
       if (!trackingNumber) {
-        errorDiv.textContent = 'Please enter a tracking number';
+        errorDiv.textContent = 'Sila masukkan nombor tracking';
         loadingDiv.style.display = 'none';
         return;
       }
 
       try {
-        const response = await fetch(`/track?number=${encodeURIComponent(trackingNumber)}&carrier=${encodeURIComponent(carrier)}`);
+        const response = await fetch(`/track?number=${encodeURIComponent(trackingNumber)}`);
         
         if (!response.ok) {
           const error = await response.json();
-          throw new Error(error.message || 'Failed to track shipment');
+          throw new Error(error.error || 'Ralat dalam pengesanan');
         }
 
         const data = await response.json();
         
-        // Display result
+        // Format hasil pengesanan
         let html = `
-          <p><strong>Status:</strong> ${data.status || 'Unknown'}</p>
-          <p><strong>Carrier:</strong> ${data.carrier || carrier}</p>
-          <p><strong>Tracking Number:</strong> ${data.trackingNumber || trackingNumber}</p>
+          <p><strong>Nombor Tracking:</strong> ${data.trackingNumber || trackingNumber}</p>
+          <p><strong>Status Terkini:</strong> ${data.status || 'Tiada maklumat'}</p>
         `;
 
         if (data.events && data.events.length > 0) {
-          html += '<h3>Tracking History</h3>';
+          html += '<h3>Sejarah Pengesanan</h3>';
           data.events.forEach(event => {
             html += `
               <div class="event">
-                <strong>${new Date(event.date).toLocaleString()}</strong><br>
-                ${event.status} - ${event.location || ''}
+                <strong>${formatDate(event.date)}</strong><br>
+                ${event.status || ''} ${event.location ? ' - ' + event.location : ''}
               </div>
             `;
           });
+        } else {
+          html += '<p>Tiada sejarah pengesanan ditemui</p>';
         }
 
         infoDiv.innerHTML = html;
         resultDiv.style.display = 'block';
       } catch (err) {
-        errorDiv.textContent = err.message;
-      } finally {
-        loadingDiv.style.display = 'none';
-      }
-    }
-  </script>
-</body>
-</html>
+        errorDiv.textContent

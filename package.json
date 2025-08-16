@@ -1,7 +1,7 @@
 {
-  "name": "trackmage-tracking",
+  "name": "tracking-pos-malaysia",
   "version": "1.0.0",
-  "description": "Simple TrackMage tracking website",
+  "description": "Sistem pengesanan Pos Malaysia dengan TrackMage API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
