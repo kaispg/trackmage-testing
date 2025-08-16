@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TrackMage Tracking</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .tracking-form {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    input, select, button {
+      padding: 8px 12px;
+      font-size: 16px;
+    }
+    button {
+      background: #0070f3;
+      color: white;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+    }
+    .error {
+      color: red;
+      margin-top: 10px;
+    }
+    .event {
+      margin: 5px 0;
+      padding: 5px;
+      border-left: 3px solid #0070f3;
+    }
+  </style>
+</head>
+<body>
+  <h1>Shipment Tracking</h1>
+  
+  <div class="tracking-form">
+    <input type="text" id="trackingNumber" placeholder="Enter tracking number">
+    <select id="carrier">
+      <option value="ups">UPS</option>
+      <option value="fedex">FedEx</option>
+      <option value="usps">USPS</option>
+      <option value="dhl">DHL</option>
+    </select>
+    <button id="trackButton">Track</button>
+  </div>
+  
+  <div id="loading" style="display: none;">Loading...</div>
+  <div id="error" class="error"></div>
+  
+  <div id="result" class="result" style="display: none;">
+    <h2>Tracking Result</h2>
+    <div id="trackingInfo"></div>
+  </div>
+
+  <script>
+    document.getElementById('trackButton').addEventListener('click', trackShipment);
+
+    async function trackShipment() {
+      const trackingNumber = document.getElementById('trackingNumber').value;
+      const carrier = document.getElementById('carrier').value;
+      const resultDiv = document.getElementById('result');
+      const errorDiv = document.getElementById('error');
+      const loadingDiv = document.getElementById('loading');
+      const infoDiv = document.getElementById('trackingInfo');
+
+      // Reset UI
+      errorDiv.textContent = '';
+      resultDiv.style.display = 'none';
+      loadingDiv.style.display = 'block';
+
+      if (!trackingNumber) {
+        errorDiv.textContent = 'Please enter a tracking number';
+        loadingDiv.style.display = 'none';
+        return;
+      }
+
+      try {
+        const response = await fetch(`/track?number=${encodeURIComponent(trackingNumber)}&carrier=${encodeURIComponent(carrier)}`);
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.message || 'Failed to track shipment');
+        }
+
+        const data = await response.json();
+        
+        // Display result
+        let html = `
+          <p><strong>Status:</strong> ${data.status || 'Unknown'}</p>
+          <p><strong>Carrier:</strong> ${data.carrier || carrier}</p>
+          <p><strong>Tracking Number:</strong> ${data.trackingNumber || trackingNumber}</p>
+        `;
+
+        if (data.events && data.events.length > 0) {
+          html += '<h3>Tracking History</h3>';
+          data.events.forEach(event => {
+            html += `
+              <div class="event">
+                <strong>${new Date(event.date).toLocaleString()}</strong><br>
+                ${event.status} - ${event.location || ''}
+              </div>
+            `;
+          });
+        }
+
+        infoDiv.innerHTML = html;
+        resultDiv.style.display = 'block';
+      } catch (err) {
+        errorDiv.textContent = err.message;
+      } finally {
+        loadingDiv.style.display = 'none';
+      }
+    }
+  </script>
+</body>
+</html>
